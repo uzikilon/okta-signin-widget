@@ -1,35 +1,30 @@
 var Expect = module.exports = {};
 
 var _ = require('lodash'),
-    grunt = require('grunt'),
+    fs = require('fs-extra'),
     axe = require('axe-webdriverjs'),
-    protractor = require('protractor');
+    protractor = require('protractor'),
+    textReporter = require('./text-reporter'),
+    junitReporter = require('./junit-reporter');
+
+
+function makeFileName(url) {
+  return './build2/reports/508/junit/' + url.split('://').pop().replace(/[\.\:\/]/g, '-') + _.uniqueId('_') + '.xml';
+}
+
+fs.emptyDirSync('./build2/reports/508');
+fs.mkdirsSync('./build2/reports/508/text');
+fs.mkdirsSync('./build2/reports/508/junit');
+
+var textWriter = fs.createWriteStream('./build2/reports/508/text/report.txt');
 
 Expect.toBeA11yCompliant = function () {
   var deferred = protractor.promise.defer();
   if ('{{{CHECK_A11Y}}}' === 'true') {
     axe(browser.driver)
     .analyze(function (result) {
-      var violations = result.violations,
-          violationsCount = violations.length;
-      if (violationsCount > 0) {
-        grunt.log.subhead('  Accessibility violations');
-
-        _.each(violations, function (violation) {
-          var severity  = violation.impact,
-              help      = violation.help;
-          grunt.log.writeln();
-          grunt.log.writeln('    ' + severity + ': ' + help);
-          _.each(violation.nodes, function (node) {
-            var htmlsnippet = node.html;
-            grunt.log.writeln('    - ' + htmlsnippet);
-          });
-        });
-      } else {
-        grunt.log.subhead('  There are no accessibility violations');
-      }
-
-      expect(violations).toBeNull();
+      textReporter([result], 0, textWriter);
+      junitReporter(result, makeFileName(result.url));
       deferred.fulfill();
     });
   } else {
